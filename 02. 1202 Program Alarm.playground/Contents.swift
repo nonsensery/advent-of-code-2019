@@ -78,3 +78,15 @@ func compute(noun: Int, verb: Int) -> Int {
 
 print(compute(noun: 12, verb: 02))
 //12490719
+
+// MARK: Part 2
+
+let desiredOutput = 19690720
+
+// This is based on some observed behavior of how the noun and verb affect the output.
+// Not sure how to generalize it without solving the halting problem...
+let noun = (0...99).first(where: { compute(noun: $0 + 1, verb: 0) > desiredOutput })!
+let verb = (0...99).first(where: { compute(noun: noun, verb: $0) == desiredOutput })!
+
+print("\(noun * 100 + verb)")
+//203
