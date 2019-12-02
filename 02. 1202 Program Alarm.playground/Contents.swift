@@ -11,41 +11,41 @@ let program = Bundle.main.url(forResource: "gravity-assist", withExtension: "int
 struct Computer {
     typealias MemoryValue = Int
     typealias Memory = [MemoryValue]
-    typealias Pointer = Memory.Index
+    typealias MemoryAddress = Memory.Index
 
     enum Instruction {
-        case math((MemoryValue, MemoryValue) -> MemoryValue, lhs: Pointer, rhs: Pointer, dest: Pointer)
+        case math((MemoryValue, MemoryValue) -> MemoryValue, lhs: MemoryAddress, rhs: MemoryAddress, dest: MemoryAddress)
         case halt
     }
 
     var memory: Memory
-    private var pc: Pointer
+    private var ip: MemoryAddress
 
     init(memory: Memory = []) {
         self.memory = memory
-        self.pc = memory.startIndex
+        self.ip = memory.startIndex
     }
 
     private mutating func readNextInstruction() -> Instruction? {
-        guard pc < memory.endIndex else {
+        guard ip < memory.endIndex else {
             return nil
         }
 
-        func advancePC() -> MemoryValue {
+        func advanceIP() -> MemoryValue {
             defer {
-                pc = memory.index(after: pc)
+                ip = memory.index(after: ip)
             }
 
-            return memory[pc]
+            return memory[ip]
         }
 
-        let opcode = advancePC()
+        let opcode = advanceIP()
 
         switch opcode {
         case 1:
-            return .math(+, lhs: advancePC(), rhs: advancePC(), dest: advancePC())
+            return .math(+, lhs: advanceIP(), rhs: advanceIP(), dest: advanceIP())
         case 2:
-            return .math(*, lhs: advancePC(), rhs: advancePC(), dest: advancePC())
+            return .math(*, lhs: advanceIP(), rhs: advanceIP(), dest: advanceIP())
         case 99:
             return .halt
         default:
@@ -59,15 +59,22 @@ struct Computer {
             case .math(let op, lhs: let lhs, rhs: let rhs, dest: let dest):
                 memory[dest] = op(memory[lhs], memory[rhs])
             case .halt:
-                pc = memory.endIndex
+                ip = memory.endIndex
             }
         }
     }
 }
 
-var computer = Computer(memory: program)
+func compute(noun: Int, verb: Int) -> Int {
+    var computer = Computer(memory: program)
 
-computer.memory[1...2] = [12, 02]
-computer.run()
+    computer.memory[1...2] = [noun, verb]
+    computer.run()
 
-print(computer.memory[0])
+    return computer.memory[0]
+}
+
+// MARK: Part 1
+
+print(compute(noun: 12, verb: 02))
+//12490719
