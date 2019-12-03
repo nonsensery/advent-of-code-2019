@@ -53,11 +53,17 @@ let paths = Bundle.main.url(forResource: "input", withExtension: "txt")
 struct Trace {
     private var cursor = Point() {
         didSet {
-            points.insert(cursor)
+            distance += 1
+
+            if !pointDistances.keys.contains(cursor) {
+                pointDistances[cursor] = distance
+            }
         }
     }
 
-    private(set) var points: Set<Point> = []
+    private var distance = 0
+
+    private(set) var pointDistances: [Point: Int] = [:]
 
     func applying(_ movements: [Movement]) -> Self {
         var copy = self
@@ -89,11 +95,16 @@ struct Trace {
     }
 }
 
-let pointSets = paths.map({ Trace().applying($0).points })
+let pointDistances = paths.map({ Trace().applying($0).pointDistances })
 
-let points1 = pointSets[0]
-let points2 = pointSets[1]
+let pointDistances1 = pointDistances[0]
+let pointDistances2 = pointDistances[1]
 
-let intersections = Array(points1.intersection(points2))
+let intersections = Set(pointDistances1.keys).intersection(pointDistances2.keys)
+let distances = intersections.map({ p in pointDistances1[p]! + pointDistances2[p]! })
 
-print(intersections.map({ $0.manhattanDistance }).min())
+if let min = distances.min() {
+    print(min) // => 48012
+} else {
+    print("no solution")
+}
