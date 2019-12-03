@@ -97,11 +97,20 @@ struct Trace {
 
 let pointDistances = paths.map({ Trace().applying($0).pointDistances })
 
-let pointDistances1 = pointDistances[0]
-let pointDistances2 = pointDistances[1]
+let intersections = pointDistances
+    .map({ $0.keys })
+    .reduce(nil as Set<Point>?) {
+        if let result = $0 {
+            return result.intersection($1)
+        } else {
+            return Set($1)
+        }
+    }
+    ?? []
 
-let intersections = Set(pointDistances1.keys).intersection(pointDistances2.keys)
-let distances = intersections.map({ p in pointDistances1[p]! + pointDistances2[p]! })
+let distances = intersections.map { p in
+    pointDistances.compactMap({ $0[p] }).reduce(0, +)
+}
 
 if let min = distances.min() {
     print(min) // => 48012
