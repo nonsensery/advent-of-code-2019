@@ -1,35 +1,26 @@
 import UIKit
 
 func countPasswords(in range: ClosedRange<Int>) -> Int {
-    var count = 0
-
-    range.forEach { x in
-        let digits = String(x).map({ $0.wholeNumberValue! })
-
-        guard hasRepeatedElement(digits) else {
-            return
-        }
-
-        guard !hasDecreasingElements(digits) else {
-            return
-        }
-
-        count += 1
-    }
-
-    return count
+    range
+        .lazy
+        .map({ String($0).map({ $0.wholeNumberValue! }) })
+        .filter({ $0.streaks().contains(where: { $0.count >= 2 }) })
+        .filter({ !hasDecreasingElements($0) })
+        .count
 }
 
-func hasRepeatedElement<T: Hashable>(_ array: [T]) -> Bool {
-    var seen = Set<T>()
+extension Array where Element: Equatable {
+    func streaks() -> [[Element]] {
+        reduce(into: []) { streaks, element in
+            if element != streaks.last?.last {
+                streaks.append([])
+            }
 
-    for element in array {
-        if !seen.insert(element).inserted {
-            return true
+            let lastIndex = streaks.index(before: streaks.endIndex)
+
+            streaks[lastIndex].append(element)
         }
     }
-
-    return false
 }
 
 func hasDecreasingElements<T: Comparable>(_ array: [T]) -> Bool {
@@ -48,3 +39,4 @@ func hasDecreasingElements<T: Comparable>(_ array: [T]) -> Bool {
 }
 
 print(countPasswords(in: 307237...769058))
+// 889
