@@ -1,13 +1,35 @@
 
 let range = 307237...769058
 
-func countPasswords(in range: ClosedRange<Int>, isAcceptableStreak: @escaping ([Int]) -> Bool) -> Int {
-    range
-        .lazy
-        .map({ String($0).map({ $0.wholeNumberValue! }) })
-        .filter({ $0.streaks().contains(where: isAcceptableStreak) })
-        .filter({ !hasDecreasingElements($0) })
-        .count
+func countPasswords(in range: ClosedRange<Int>, isAcceptableStreak: @escaping ([UInt8]) -> Bool) -> Int {
+    sequence(state: range.lowerBound - 1) { (x: inout Int) -> Int? in
+        x = (x + 1).liftingDigits()
+
+        return range ~= x ? x : nil
+    }
+    .filter({ $0.digits.streaks().contains(where: isAcceptableStreak) })
+    .count
+}
+
+extension Int {
+    init(digits: [UInt8]) {
+        self = Int(digits.map({ String($0) }).joined()) ?? 0
+    }
+
+    var digits: [UInt8] {
+        String(self).map({ $0.wholeNumberValue! }).map({ UInt8(exactly: $0)! })
+    }
+
+    /// Gets the smallest value greater than or equal to self where successive digits do not decrease.
+    func liftingDigits() -> Int {
+        let digits = self.digits
+
+        if let ((value, _), i) = zip(zip(digits, digits.dropFirst()), digits.indices.dropFirst()).first(where: { $0.0.0 > $0.0.1 }) {
+            return Self(digits: digits.prefix(i) + Array(repeating: value, count: digits.count - i))
+        } else {
+            return self
+        }
+    }
 }
 
 extension Array where Element: Equatable {
@@ -22,21 +44,6 @@ extension Array where Element: Equatable {
             streaks[lastIndex].append(element)
         }
     }
-}
-
-func hasDecreasingElements<T: Comparable>(_ array: [T]) -> Bool {
-    guard var last = array.first else {
-        return false
-    }
-
-    for element in array.dropFirst() {
-        if element < last {
-            return true
-        }
-        last = element
-    }
-
-    return false
 }
 
 print(countPasswords(in: range, isAcceptableStreak: { $0.count >= 2 }))
