@@ -7,8 +7,12 @@ typealias MemoryAddress = Memory.Index
 enum Instruction {
     case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
     case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case input(dest: MemoryAddress)
-    case output(source: Parameter)
+    case input(MemoryAddress)
+    case output(Parameter)
+    case jumpIfTrue(condition: Parameter, location: Parameter)
+    case jumpIfFalse(condition: Parameter, location: Parameter)
+    case lessThan(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+    case equals(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
     case halt
 }
 
@@ -25,10 +29,11 @@ enum SyntaxError: Error {
 enum RuntimeError: Error {
     case illegalInputAccess
     case illegalMemoryAccess(MemoryAddress)
+    case illegalJump(MemoryAddress)
 }
 
 func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue] {
-    var memory = program
+    var memory: Memory
 
     func read(from address: MemoryAddress) throws -> MemoryValue {
         guard memory.indices.contains(address) else {
@@ -46,7 +51,7 @@ func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue]
         memory[address] = value
     }
 
-    var input = ArraySlice(input) // Must be ArraySlice to have popFirst()
+    var input: ArraySlice<MemoryValue> = ArraySlice(input) // Must be ArraySlice to have popFirst()
 
     func readInput() throws -> MemoryValue {
         guard let value = input.popFirst() else {
@@ -56,13 +61,21 @@ func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue]
         return value
     }
 
-    var output: [MemoryValue] = []
+    var output: [MemoryValue]
 
     func writeOutput(_ value: MemoryValue) {
         output.append(value)
     }
 
-    var ip = memory.startIndex
+    var ip: MemoryAddress
+
+    func jump(to address: MemoryAddress) throws {
+        guard memory.indices.contains(address) else {
+            throw RuntimeError.illegalJump(address)
+        }
+
+        ip = address
+    }
 
     func chompValue() throws -> MemoryValue {
         let value = try read(from: ip)
@@ -94,9 +107,17 @@ func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue]
         case 2:
             return try .multiply(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
         case 3:
-            return try .input(dest: chompValue())
+            return try .input(chompValue())
         case 4:
-            return try .output(source: chompParameter())
+            return try .output(chompParameter())
+        case 5:
+            return try .jumpIfTrue(condition: chompParameter(), location: chompParameter())
+        case 6:
+            return try .jumpIfFalse(condition: chompParameter(), location: chompParameter())
+        case 7:
+            return try .lessThan(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
+        case 8:
+            return try .equals(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
         case 99:
             return .halt
         default:
@@ -113,6 +134,11 @@ func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue]
         }
     }
 
+    memory = program
+    input = ArraySlice(input)
+    output = []
+    ip = memory.startIndex
+
     while ip < memory.endIndex {
         let instruction = try chompInstruction()
 
@@ -125,6 +151,18 @@ func compute(program: Memory, input: [MemoryValue] = []) throws -> [MemoryValue]
             try write(readInput(), to: dest)
         case .output(let source):
             try writeOutput(fetch(source))
+        case .jumpIfTrue(let condition, let location):
+            if try fetch(condition) != 0 {
+                try jump(to: fetch(location))
+            }
+        case .jumpIfFalse(let condition, let location):
+            if try fetch(condition) == 0 {
+                try jump(to: fetch(location))
+            }
+        case .lessThan(let lhs, let rhs, let dest):
+            try write(fetch(lhs) < fetch(rhs) ? 1 : 0, to: dest)
+        case .equals(let lhs, let rhs, let dest):
+            try write(fetch(lhs) == fetch(rhs) ? 1 : 0, to: dest)
         case .halt:
             ip = memory.endIndex
         }
@@ -144,3 +182,7 @@ let program = Bundle.main.url(forResource: "input", withExtension: "txt")
 // MARK: Part 1
 
 print(try! compute(program: program, input: [1]).last!)
+
+// MARK: Part 2
+
+print(try! compute(program: program, input: [5]).last!)
