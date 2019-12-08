@@ -1,5 +1,6 @@
 
-public extension Sequence {
+public extension Array {
+    /// Gets all permutations of the elements in this array.
     func permutations() -> [[Element]] {
         func generate(prefix: [Element] = [], remaining: [Element], yield: ([Element]) -> Void) {
             guard !remaining.isEmpty else {
@@ -16,7 +17,7 @@ public extension Sequence {
         }
 
         var result: [[Element]] = []
-        generate(remaining: Array(self), yield: { result.append($0) })
+        generate(remaining: self, yield: { result.append($0) })
 
         return result
     }

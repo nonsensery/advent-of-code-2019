@@ -25,115 +25,38 @@ public enum SyntaxError: Error {
 }
 
 public enum RuntimeError: Error {
-    case illegalInputAccess
     case illegalMemoryAccess(MemoryAddress)
     case illegalJump(MemoryAddress)
 }
 
-//public struct Computer {
-//    var memory: Memory
-//    var input: ArraySlice<ComputeValue> // Must be ArraySlice to have popFirst()
-//    var output: [ComputeValue]
-//    var ip: MemoryAddress
-//
-//    func read(from address: MemoryAddress) throws -> ComputeValue {
-//        guard memory.indices.contains(address) else {
-//            throw RuntimeError.illegalMemoryAccess(address)
-//        }
-//
-//        return memory[address]
-//    }
-//
-//    func write(_ value: ComputeValue, to address: MemoryAddress) throws {
-//        guard memory.indices.contains(address) else {
-//            throw RuntimeError.illegalMemoryAccess(address)
-//        }
-//
-//        memory[address] = value
-//    }
-//
-//    func readInput() throws -> ComputeValue {
-//        guard let value = input.popFirst() else {
-//            throw RuntimeError.illegalInputAccess
-//        }
-//
-//        return value
-//    }
-//
-//    func writeOutput(_ value: ComputeValue) {
-//        output.append(value)
-//    }
-//
-//    func jump(to address: MemoryAddress) throws {
-//        guard memory.indices.contains(address) else {
-//            throw RuntimeError.illegalJump(address)
-//        }
-//
-//        ip = address
-//    }
-//
-//    func chompValue() throws -> ComputeValue {
-//        let value = try read(from: ip)
-//        ip = memory.index(after: ip)
-//        return value
-//    }
-//
-//    func chompInstruction() throws -> Instruction {
-//        let opcodeAndParameterModes = try chompValue()
-//        let opcode = opcodeAndParameterModes % 100
-//        var parameterModes = Array(String(opcodeAndParameterModes / 100).map({ $0.wholeNumberValue! }))
-//
-//        func chompParameter() throws -> Parameter {
-//            let mode = parameterModes.popLast() ?? 0
-//
-//            switch mode {
-//            case 0:
-//                return try .position(chompValue())
-//            case 1:
-//                return try .immediate(chompValue())
-//            default:
-//                throw SyntaxError.invalidParameterMode(mode)
-//            }
-//        }
-//
-//        switch opcode {
-//        case 1:
-//            return try .add(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
-//        case 2:
-//            return try .multiply(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
-//        case 3:
-//            return try .input(chompValue())
-//        case 4:
-//            return try .output(chompParameter())
-//        case 5:
-//            return try .jumpIfTrue(condition: chompParameter(), location: chompParameter())
-//        case 6:
-//            return try .jumpIfFalse(condition: chompParameter(), location: chompParameter())
-//        case 7:
-//            return try .lessThan(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
-//        case 8:
-//            return try .equals(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
-//        case 99:
-//            return .halt
-//        default:
-//            throw SyntaxError.invalidOpcode(opcode)
-//        }
-//    }
-//
-//    func fetch(_ parameter: Parameter) throws -> ComputeValue {
-//        switch parameter {
-//        case .position(let address):
-//            return try read(from: address)
-//        case .immediate(let value):
-//            return value
-//        }
-//    }
-//}
+public class Computer {
+    public var input: Pipe<ComputeValue> = Pipe()
+    public var output: Pipe<ComputeValue> = Pipe()
 
-public func compute(label: String, program: Memory, input: () -> ComputeValue, output: (ComputeValue) -> Void) throws {
-    var memory: Memory
+    private var memory: Memory
+    private var ip: MemoryAddress
+    private var state: State
 
-    func read(from address: MemoryAddress) throws -> ComputeValue {
+    private enum State {
+        case running, waitingForInput(MemoryAddress), halted
+    }
+
+    public init(program: Memory = [99]) {
+        self.memory = program
+        self.ip = memory.startIndex
+        self.state = .running
+    }
+
+    public var isHalted: Bool {
+        switch state {
+        case .running, .waitingForInput:
+            return false
+        case .halted:
+            return true
+        }
+    }
+
+    private func read(from address: MemoryAddress) throws -> ComputeValue {
         guard memory.indices.contains(address) else {
             throw RuntimeError.illegalMemoryAccess(address)
         }
@@ -141,7 +64,7 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         return memory[address]
     }
 
-    func write(_ value: ComputeValue, to address: MemoryAddress) throws {
+    private func write(_ value: ComputeValue, to address: MemoryAddress) throws {
         guard memory.indices.contains(address) else {
             throw RuntimeError.illegalMemoryAccess(address)
         }
@@ -149,32 +72,28 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         memory[address] = value
     }
 
-//    var input: ArraySlice<ComputeValue> = ArraySlice(input) // Must be ArraySlice to have popFirst()
-
-    func readInput() throws -> ComputeValue {
-//        guard let value = input.popFirst() else {
+    private func readInput(into dest: MemoryAddress) throws {
+//        guard let input = input else {
 //            throw RuntimeError.illegalInputAccess
 //        }
 //
-//        return value
-        print("\(label) reading from input...")
-        let value = input()
-        print("... \(label) read from input: \(value)")
-        return value
+        if let value = input.read() {
+            try write(value, to: dest)
+            state = .running
+        } else {
+            state = .waitingForInput(dest)
+        }
     }
 
-//    var output: [ComputeValue]
-
-    func writeOutput(_ value: ComputeValue) {
-//        output.append(value)
-        print("\(label) writing to output: \(value)...")
-        output(value)
-        print("... \(label) wrote to output")
+    private func writeOutput(_ value: ComputeValue) throws {
+//        guard let output = output else {
+//            throw RuntimeError.illegalOutputAccess
+//        }
+//
+        output.write(value)
     }
 
-    var ip: MemoryAddress
-
-    func jump(to address: MemoryAddress) throws {
+    private func jump(to address: MemoryAddress) throws {
         guard memory.indices.contains(address) else {
             throw RuntimeError.illegalJump(address)
         }
@@ -182,13 +101,13 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         ip = address
     }
 
-    func chompValue() throws -> ComputeValue {
+    private func chompValue() throws -> ComputeValue {
         let value = try read(from: ip)
         ip = memory.index(after: ip)
         return value
     }
 
-    func chompInstruction() throws -> Instruction {
+    private func chompInstruction() throws -> Instruction {
         let opcodeAndParameterModes = try chompValue()
         let opcode = opcodeAndParameterModes % 100
         var parameterModes = Array(String(opcodeAndParameterModes / 100).map({ $0.wholeNumberValue! }))
@@ -230,7 +149,7 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         }
     }
 
-    func fetch(_ parameter: Parameter) throws -> ComputeValue {
+    private func fetch(_ parameter: Parameter) throws -> ComputeValue {
         switch parameter {
         case .position(let address):
             return try read(from: address)
@@ -239,12 +158,21 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         }
     }
 
-    memory = program
-//    input = ArraySlice(input)
-//    output = []
-    ip = memory.startIndex
+    public func tick() throws {
+        switch state {
+        case .halted:
+            break // no op
+        case .running:
+            try executeNextInstruction()
+        case .waitingForInput(let dest):
+            if let value = input.read() {
+                try write(value, to: dest)
+                state = .running
+            }
+        }
+    }
 
-    while ip < memory.endIndex {
+    private func executeNextInstruction() throws {
         let instruction = try chompInstruction()
 
         switch instruction {
@@ -253,7 +181,7 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         case .multiply(let lhs, let rhs, let dest):
             try write(fetch(lhs) * fetch(rhs), to: dest)
         case .input(let dest):
-            try write(readInput(), to: dest)
+            try readInput(into: dest)
         case .output(let source):
             try writeOutput(fetch(source))
         case .jumpIfTrue(let condition, let location):
@@ -269,11 +197,7 @@ public func compute(label: String, program: Memory, input: () -> ComputeValue, o
         case .equals(let lhs, let rhs, let dest):
             try write(fetch(lhs) == fetch(rhs) ? 1 : 0, to: dest)
         case .halt:
-            ip = memory.endIndex
+            state = .halted
         }
     }
-
-    print("\(label) halted")
-//
-//    return output
 }

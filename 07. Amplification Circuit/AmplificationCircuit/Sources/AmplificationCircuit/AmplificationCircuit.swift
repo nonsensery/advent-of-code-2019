@@ -1,50 +1,41 @@
 import Foundation
 
-// MARK: - Part 1
+ // MARK: - Part 1
 
-//func findMaxThrusterSignal<S>(program: Memory, phaseSettings: S) -> ComputeValue where S: Sequence, S.Element == ComputeValue {
-//    phaseSettings
-//        .permutations()
-//        .map { phaseSettings in
-//            phaseSettings.reduce(0) { amplifierInput, phaseSetting in
-//                try! compute(program: program, input: [phaseSetting, amplifierInput])[0]
-//            }
-//        }
-//        .reduce(0, max)
-//}
-//
-//print("sample1: \(findMaxThrusterSignal(program: Resource.sample1_txt.values(), phaseSettings: 0...4))")
-//print("sample2: \(findMaxThrusterSignal(program: Resource.sample2_txt.values(), phaseSettings: 0...4))")
-//print("sample3: \(findMaxThrusterSignal(program: Resource.sample3_txt.values(), phaseSettings: 0...4))")
-//print("input: \(findMaxThrusterSignal(program: Resource.input_txt.values(), phaseSettings: 0...4))")
+public func findMaxThrusterSignalAndPhaseSettings(program: Memory, phaseSettings: [ComputeValue])
+    throws -> (thrusterSignal: ComputeValue, phaseSettings: [Int])? {
 
-// MARK: - Part 2
-
-
-func findMaxThrusterSignalWithFeedback<S>(program: Memory, phaseSettings: S) -> ComputeValue where S: Sequence, S.Element == ComputeValue {
-    let pipes = phaseSettings.map({ MyPipe<ComputeValue>(label: "Pipe<\(10 - $0)>") })
-    let group = DispatchGroup()
-
-    let inputs = pipes.suffix(1) + pipes.dropLast()
-    let outputs = pipes.dropFirst() + pipes.prefix(1)
-
-    zip(zip(inputs, outputs), phaseSettings).forEach {
-        let ((input, output), phaseSetting) = $0
-        let group = DispatchGroup()
-
-        input.write(phaseSetting)
-
-        DispatchQueue.global().async {
-            group.enter()
-            try! compute(label: "Computer<\(10 - phaseSetting)>", program: program, input: input.read, output: output.write)
-            group.leave()
+    try phaseSettings
+        .permutations()
+        .map {
+            (
+                thrusterSignal: try findMaxThrusterSignalWithFeedback(program: program, phaseSettings: $0) ?? 0,
+                phaseSettings: $0
+            )
         }
+        .max(by: { $0.thrusterSignal < $1.thrusterSignal })
+}
+
+public func findMaxThrusterSignal(program: Memory, phaseSettings: [ComputeValue]) throws -> ComputeValue? {
+    let computers = phaseSettings.map { _ in
+        Computer(program: program)
     }
 
-    group.wait()
+    zip(computers, computers.dropFirst()).forEach {
+        $0.1.input = $0.0.output
+    }
 
-    return pipes.last!.read()
+    zip(computers, phaseSettings).forEach {
+        $0.0.input.write($0.1)
+    }
+
+    computers.first?.input.write(0)
+
+    while computers.contains(where: { !$0.isHalted }) {
+        try computers.forEach({ try $0.tick() })
+    }
+
+    return computers.last?.output.read()
 }
 //
-//print("sample4: \(findMaxThrusterSignalWithFeedback(program: Resource.sample1_txt.values(), phaseSettings: 5...9))")
 //
