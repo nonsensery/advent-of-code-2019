@@ -74,4 +74,22 @@ final class ComputerTests: XCTestCase {
         XCTAssertEqual(cs.last?.output.read(), 1_249)
     }
 
+    func testFeedbackLoop() throws {
+        let cs = (1...5).map {
+            Computer(instructions: 3,200, 1001,200,$0,200, 4,200, 3,200, 1001,200,$0,200, 4,200, 99)
+        }
+
+        zip(cs, cs.dropFirst() + cs.prefix(1)).forEach {
+            $0.1.input = $0.0.output
+        }
+
+        cs.first?.input.write(1_234)
+
+        while cs.contains(where: { !$0.isHalted }) {
+            try cs.forEach({ try $0.tick() })
+        }
+
+        XCTAssertEqual(cs.last?.output.read(), 1_264)
+    }
+
 }
