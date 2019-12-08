@@ -8,8 +8,30 @@ final class SpaceImageFormatTests: XCTestCase {
         XCTAssertEqual(result, 2193)
     }
 
+    func testPart2Result() {
+        let result = SpaceImage(data: inputData, width: inputWidth, height: inputHeight)
+            .flattened(transparent: 2)
+            .map {
+                $0.map({ $0 == 0 ? "⬛️" : "⬜️" }).joined(separator: "")
+            }
+            .joined(separator: "\n")
+
+        XCTAssertEqual(
+            result,
+            """
+            ⬜️⬛️⬛️⬛️⬜️⬜️⬜️⬜️⬜️⬛️⬜️⬛️⬛️⬜️⬛️⬜️⬜️⬜️⬜️⬛️⬜️⬜️⬜️⬜️⬛️
+            ⬜️⬛️⬛️⬛️⬜️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬜️⬛️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬛️⬛️
+            ⬛️⬜️⬛️⬜️⬛️⬜️⬜️⬜️⬛️⬛️⬜️⬜️⬜️⬜️⬛️⬜️⬜️⬜️⬛️⬛️⬜️⬜️⬜️⬛️⬛️
+            ⬛️⬛️⬜️⬛️⬛️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬜️⬛️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬛️⬛️
+            ⬛️⬛️⬜️⬛️⬛️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬜️⬛️⬜️⬛️⬛️⬛️⬛️⬜️⬛️⬛️⬛️⬛️
+            ⬛️⬛️⬜️⬛️⬛️⬜️⬜️⬜️⬜️⬛️⬜️⬛️⬛️⬜️⬛️⬜️⬜️⬜️⬜️⬛️⬜️⬛️⬛️⬛️⬛️
+            """
+        )
+    }
+
     static var allTests = [
         ("testPart1Result", testPart1Result),
+        ("testPart2Result", testPart2Result),
     ]
 }
 

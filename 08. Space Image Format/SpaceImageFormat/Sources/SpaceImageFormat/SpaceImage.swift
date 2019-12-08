@@ -35,6 +35,18 @@ public struct SpaceImage: Equatable {
         return oneAndTwoCounts.reduce(1, *)
     }
 
+    public func flattened(transparent: Color? = nil) -> [[Int]] {
+        (0 ..< height).map { row in
+            (0 ..< width).map { col in
+                layers
+                    .lazy
+                    .map({ $0.pixels[row][col] })
+                    .first(where: { $0 != transparent })
+                    ?? transparent!
+            }
+        }
+    }
+
     //
 
     public typealias Color = Int
