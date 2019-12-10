@@ -1,38 +1,40 @@
-public typealias ComputeValue = Int
-public typealias Memory = [ComputeValue]
-public typealias MemoryAddress = Memory.Index
-
-enum Instruction {
-    case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case input(dest: MemoryAddress)
-    case output(source: Parameter)
-    case jumpIfTrue(condition: Parameter, location: Parameter)
-    case jumpIfFalse(condition: Parameter, location: Parameter)
-    case lessThan(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case equals(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case halt
-}
-
-enum Parameter {
-    case position(MemoryAddress)
-    case immediate(ComputeValue)
-}
-
-public enum SyntaxError: Error {
-    case invalidOpcode(Int)
-    case invalidParameterMode(Int)
-    case invalidParameterModeForDestination(Int)
-}
-
-public enum RuntimeError: Error {
-    case illegalMemoryAddress(Int)
-    case illegalJump(MemoryAddress)
-}
 
 public class Intcomputer {
-    public var input: Pipe<ComputeValue> = Pipe()
-    public var output: Pipe<ComputeValue> = Pipe()
+    public typealias Value = Int
+    public typealias Program = [Value]
+    public typealias Memory = Intcomputer.Program
+    public typealias MemoryAddress = Memory.Index
+
+    public enum SyntaxError: Error {
+        case invalidOpcode(Int)
+        case invalidParameterMode(Int)
+        case invalidParameterModeForDestination(Int)
+    }
+
+    public enum RuntimeError: Error {
+        case illegalMemoryAddress(Int)
+        case illegalJump(MemoryAddress)
+    }
+
+    private enum Instruction {
+        case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+        case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+        case input(dest: MemoryAddress)
+        case output(source: Parameter)
+        case jumpIfTrue(condition: Parameter, location: Parameter)
+        case jumpIfFalse(condition: Parameter, location: Parameter)
+        case lessThan(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+        case equals(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+        case halt
+    }
+
+    private enum Parameter {
+        case position(MemoryAddress)
+        case immediate(Value)
+    }
+
+    public var input: Pipe<Value> = Pipe()
+    public var output: Pipe<Value> = Pipe()
 
     private var memory: Memory
     private var ip: MemoryAddress
@@ -42,7 +44,7 @@ public class Intcomputer {
         case running, waitingForInput(MemoryAddress), halted
     }
 
-    public init(program: Memory = [99]) {
+    public init(program: Program = [99]) {
         self.memory = program
         self.ip = memory.startIndex
         self.executionState = .running
@@ -57,7 +59,7 @@ public class Intcomputer {
         }
     }
 
-    private func read(from address: MemoryAddress) throws -> ComputeValue {
+    private func read(from address: MemoryAddress) throws -> Value {
         guard address >= memory.startIndex else {
             throw RuntimeError.illegalMemoryAddress(address)
         }
@@ -65,7 +67,7 @@ public class Intcomputer {
         return address < memory.endIndex ? memory[address] : 0
     }
 
-    private func write(_ value: ComputeValue, to address: MemoryAddress) throws {
+    private func write(_ value: Value, to address: MemoryAddress) throws {
         guard address >= memory.startIndex else {
             throw RuntimeError.illegalMemoryAddress(address)
         }
@@ -88,7 +90,7 @@ public class Intcomputer {
         }
     }
 
-    private func writeOutput(_ value: ComputeValue) throws {
+    private func writeOutput(_ value: Value) throws {
         output.write(value)
     }
 
@@ -100,7 +102,7 @@ public class Intcomputer {
         ip = address
     }
 
-    private func chompValue() throws -> ComputeValue {
+    private func chompValue() throws -> Value {
         let value = try read(from: ip)
         ip = memory.index(after: ip)
         return value
@@ -161,7 +163,7 @@ public class Intcomputer {
         }
     }
 
-    private func resolve(_ parameter: Parameter) throws -> ComputeValue {
+    private func resolve(_ parameter: Parameter) throws -> Value {
         switch parameter {
         case .position(let address):
             return try read(from: address)
