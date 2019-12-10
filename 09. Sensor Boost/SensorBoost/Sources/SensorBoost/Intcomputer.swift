@@ -26,7 +26,7 @@ public enum SyntaxError: Error {
 }
 
 public enum RuntimeError: Error {
-    case illegalMemoryAccess(MemoryAddress)
+    case illegalMemoryAddress(Int)
     case illegalJump(MemoryAddress)
 }
 
@@ -58,16 +58,22 @@ public class Intcomputer {
     }
 
     private func read(from address: MemoryAddress) throws -> ComputeValue {
-        guard memory.indices.contains(address) else {
-            throw RuntimeError.illegalMemoryAccess(address)
+        guard address >= memory.startIndex else {
+            throw RuntimeError.illegalMemoryAddress(address)
         }
 
-        return memory[address]
+        return address < memory.endIndex ? memory[address] : 0
     }
 
     private func write(_ value: ComputeValue, to address: MemoryAddress) throws {
-        guard memory.indices.contains(address) else {
-            throw RuntimeError.illegalMemoryAccess(address)
+        guard address >= memory.startIndex else {
+            throw RuntimeError.illegalMemoryAddress(address)
+        }
+
+        let underflow = memory.distance(from: memory.index(before: memory.endIndex), to: address)
+
+        if underflow > 0 {
+            memory += Array(repeating: 0, count: underflow)
         }
 
         memory[address] = value
