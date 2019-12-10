@@ -17,6 +17,7 @@ public class Intcomputer {
     }
 
     private enum Instruction {
+        case noop
         case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
         case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
         case input(dest: MemoryAddress)
@@ -140,6 +141,8 @@ public class Intcomputer {
         }
 
         switch opcode {
+        case 0:
+            return .noop
         case 1:
             return try .add(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 2:
@@ -187,6 +190,8 @@ public class Intcomputer {
         let instruction = try chompInstruction()
 
         switch instruction {
+        case .noop:
+            break
         case .add(let lhs, let rhs, let dest):
             try write(resolve(lhs) + resolve(rhs), to: dest)
         case .multiply(let lhs, let rhs, let dest):
