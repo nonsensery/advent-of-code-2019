@@ -18,20 +18,26 @@ public class Intcomputer {
 
     private enum Instruction {
         case noop
-        case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-        case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-        case input(dest: MemoryAddress)
+        case add(lhs: Parameter, rhs: Parameter, dest: Parameter.Address)
+        case multiply(lhs: Parameter, rhs: Parameter, dest: Parameter.Address)
+        case input(dest: Parameter.Address)
         case output(source: Parameter)
         case jumpIfTrue(condition: Parameter, location: Parameter)
         case jumpIfFalse(condition: Parameter, location: Parameter)
-        case lessThan(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-        case equals(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
+        case lessThan(lhs: Parameter, rhs: Parameter, dest: Parameter.Address)
+        case equals(lhs: Parameter, rhs: Parameter, dest: Parameter.Address)
+        case adjustRelativeBase(offset: Parameter)
         case halt
     }
 
     private enum Parameter {
-        case position(MemoryAddress)
+        case address(Address)
         case immediate(Value)
+
+        enum Address {
+            case position(MemoryAddress)
+            case relative(Int)
+        }
     }
 
     public var input: Pipe<Value> = Pipe()
@@ -39,6 +45,7 @@ public class Intcomputer {
 
     private var memory: Memory
     private var ip: MemoryAddress
+    private var relativeBase: Int
     private var executionState: ExecutionState
 
     private enum ExecutionState {
@@ -48,6 +55,7 @@ public class Intcomputer {
     public init(program: Program = [99]) {
         self.memory = program
         self.ip = memory.startIndex
+        self.relativeBase = 0
         self.executionState = .running
     }
 
@@ -123,17 +131,19 @@ public class Intcomputer {
 
             switch mode {
             case 0:
-                return try .position(chompAddress())
+                return try .address(.position(chompAddress()))
             case 1:
                 return try .immediate(chompValue())
+            case 2:
+                return try .address(.relative(chompValue()))
             default:
                 throw SyntaxError.invalidParameterMode(mode)
             }
         }
 
-        func chompParameterAddress() throws -> MemoryAddress {
+        func chompParameterAddress() throws -> Parameter.Address {
             switch try chompParameter() {
-            case .position(let address):
+            case .address(let address):
                 return address
             case .immediate:
                 throw SyntaxError.invalidParameterModeForDestination(1)
@@ -159,6 +169,8 @@ public class Intcomputer {
             return try .lessThan(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 8:
             return try .equals(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
+        case 9:
+            return try .adjustRelativeBase(offset: chompParameter())
         case 99:
             return .halt
         default:
@@ -168,10 +180,19 @@ public class Intcomputer {
 
     private func resolve(_ parameter: Parameter) throws -> Value {
         switch parameter {
-        case .position(let address):
-            return try read(from: address)
+        case .address(let address):
+            return try read(from: resolve(address))
         case .immediate(let value):
             return value
+        }
+    }
+
+    private func resolve(_ address: Parameter.Address) throws -> MemoryAddress {
+        switch address {
+        case .position(let address):
+            return address
+        case .relative(let offset):
+            return memory.index(memory.startIndex, offsetBy: relativeBase + offset)
         }
     }
 
@@ -193,11 +214,11 @@ public class Intcomputer {
         case .noop:
             break
         case .add(let lhs, let rhs, let dest):
-            try write(resolve(lhs) + resolve(rhs), to: dest)
+            try write(resolve(lhs) + resolve(rhs), to: resolve(dest))
         case .multiply(let lhs, let rhs, let dest):
-            try write(resolve(lhs) * resolve(rhs), to: dest)
+            try write(resolve(lhs) * resolve(rhs), to: resolve(dest))
         case .input(let dest):
-            try readInput(into: dest)
+            try readInput(into: resolve(dest))
         case .output(let source):
             try writeOutput(resolve(source))
         case .jumpIfTrue(let condition, let location):
@@ -209,9 +230,11 @@ public class Intcomputer {
                 try jump(to: resolve(location))
             }
         case .lessThan(let lhs, let rhs, let dest):
-            try write(resolve(lhs) < resolve(rhs) ? 1 : 0, to: dest)
+            try write(resolve(lhs) < resolve(rhs) ? 1 : 0, to: resolve(dest))
         case .equals(let lhs, let rhs, let dest):
-            try write(resolve(lhs) == resolve(rhs) ? 1 : 0, to: dest)
+            try write(resolve(lhs) == resolve(rhs) ? 1 : 0, to: resolve(dest))
+        case .adjustRelativeBase(let offset):
+            try relativeBase += resolve(offset)
         case .halt:
             executionState = .halted
         }
