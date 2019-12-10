@@ -23,11 +23,17 @@ final class SensorBoostTests: XCTestCase {
         XCTAssertEqual(output, [3518157894])
     }
 
+    func testPart2MyInput() throws {
+        let output = try compute(program: inputData, input: [2])
+        XCTAssertEqual(output, [80379])
+    }
+
     static var allTests = [
         ("testPart1Sample1", testPart1Sample1),
         ("testPart1Sample2", testPart1Sample2),
         ("testPart1Sample3", testPart1Sample3),
         ("testPart1MyInput", testPart1MyInput),
+        ("testPart2MyInput", testPart2MyInput),
     ]
 }
 
