@@ -5,8 +5,8 @@ public typealias MemoryAddress = Memory.Index
 enum Instruction {
     case add(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
     case multiply(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
-    case input(MemoryAddress)
-    case output(Parameter)
+    case input(dest: MemoryAddress)
+    case output(source: Parameter)
     case jumpIfTrue(condition: Parameter, location: Parameter)
     case jumpIfFalse(condition: Parameter, location: Parameter)
     case lessThan(lhs: Parameter, rhs: Parameter, dest: MemoryAddress)
@@ -22,6 +22,7 @@ enum Parameter {
 public enum SyntaxError: Error {
     case invalidOpcode(Int)
     case invalidParameterMode(Int)
+    case invalidParameterModeForDestination(Int)
 }
 
 public enum RuntimeError: Error {
@@ -29,30 +30,30 @@ public enum RuntimeError: Error {
     case illegalJump(MemoryAddress)
 }
 
-public class Computer {
+public class Intcomputer {
     public var input: Pipe<ComputeValue> = Pipe()
     public var output: Pipe<ComputeValue> = Pipe()
 
     private var memory: Memory
     private var ip: MemoryAddress
-    private var state: State
+    private var executionState: ExecutionState
 
-    private enum State {
+    private enum ExecutionState {
         case running, waitingForInput(MemoryAddress), halted
     }
 
     public init(program: Memory = [99]) {
         self.memory = program
         self.ip = memory.startIndex
-        self.state = .running
+        self.executionState = .running
     }
 
-    public var isHalted: Bool {
-        switch state {
+    public var isRunning: Bool {
+        switch executionState {
         case .running, .waitingForInput:
-            return false
-        case .halted:
             return true
+        case .halted:
+            return false
         }
     }
 
@@ -73,23 +74,15 @@ public class Computer {
     }
 
     private func readInput(into dest: MemoryAddress) throws {
-//        guard let input = input else {
-//            throw RuntimeError.illegalInputAccess
-//        }
-//
         if let value = input.read() {
             try write(value, to: dest)
-            state = .running
+            executionState = .running
         } else {
-            state = .waitingForInput(dest)
+            executionState = .waitingForInput(dest)
         }
     }
 
     private func writeOutput(_ value: ComputeValue) throws {
-//        guard let output = output else {
-//            throw RuntimeError.illegalOutputAccess
-//        }
-//
         output.write(value)
     }
 
@@ -107,6 +100,10 @@ public class Computer {
         return value
     }
 
+    private func chompAddress() throws -> MemoryAddress {
+        try chompValue()
+    }
+
     private func chompInstruction() throws -> Instruction {
         let opcodeAndParameterModes = try chompValue()
         let opcode = opcodeAndParameterModes % 100
@@ -117,7 +114,7 @@ public class Computer {
 
             switch mode {
             case 0:
-                return try .position(chompValue())
+                return try .position(chompAddress())
             case 1:
                 return try .immediate(chompValue())
             default:
@@ -125,23 +122,32 @@ public class Computer {
             }
         }
 
+        func chompParameterAddress() throws -> MemoryAddress {
+            switch try chompParameter() {
+            case .position(let address):
+                return address
+            case .immediate:
+                throw SyntaxError.invalidParameterModeForDestination(1)
+            }
+        }
+
         switch opcode {
         case 1:
-            return try .add(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
+            return try .add(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 2:
-            return try .multiply(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
+            return try .multiply(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 3:
-            return try .input(chompValue())
+            return try .input(dest: chompParameterAddress())
         case 4:
-            return try .output(chompParameter())
+            return try .output(source: chompParameter())
         case 5:
             return try .jumpIfTrue(condition: chompParameter(), location: chompParameter())
         case 6:
             return try .jumpIfFalse(condition: chompParameter(), location: chompParameter())
         case 7:
-            return try .lessThan(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
+            return try .lessThan(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 8:
-            return try .equals(lhs: chompParameter(), rhs: chompParameter(), dest: chompValue())
+            return try .equals(lhs: chompParameter(), rhs: chompParameter(), dest: chompParameterAddress())
         case 99:
             return .halt
         default:
@@ -149,7 +155,7 @@ public class Computer {
         }
     }
 
-    private func fetch(_ parameter: Parameter) throws -> ComputeValue {
+    private func resolve(_ parameter: Parameter) throws -> ComputeValue {
         switch parameter {
         case .position(let address):
             return try read(from: address)
@@ -159,16 +165,13 @@ public class Computer {
     }
 
     public func tick() throws {
-        switch state {
+        switch executionState {
         case .halted:
             break // no op
         case .running:
             try executeNextInstruction()
         case .waitingForInput(let dest):
-            if let value = input.read() {
-                try write(value, to: dest)
-                state = .running
-            }
+            try readInput(into: dest)
         }
     }
 
@@ -177,27 +180,27 @@ public class Computer {
 
         switch instruction {
         case .add(let lhs, let rhs, let dest):
-            try write(fetch(lhs) + fetch(rhs), to: dest)
+            try write(resolve(lhs) + resolve(rhs), to: dest)
         case .multiply(let lhs, let rhs, let dest):
-            try write(fetch(lhs) * fetch(rhs), to: dest)
+            try write(resolve(lhs) * resolve(rhs), to: dest)
         case .input(let dest):
             try readInput(into: dest)
         case .output(let source):
-            try writeOutput(fetch(source))
+            try writeOutput(resolve(source))
         case .jumpIfTrue(let condition, let location):
-            if try fetch(condition) != 0 {
-                try jump(to: fetch(location))
+            if try resolve(condition) != 0 {
+                try jump(to: resolve(location))
             }
         case .jumpIfFalse(let condition, let location):
-            if try fetch(condition) == 0 {
-                try jump(to: fetch(location))
+            if try resolve(condition) == 0 {
+                try jump(to: resolve(location))
             }
         case .lessThan(let lhs, let rhs, let dest):
-            try write(fetch(lhs) < fetch(rhs) ? 1 : 0, to: dest)
+            try write(resolve(lhs) < resolve(rhs) ? 1 : 0, to: dest)
         case .equals(let lhs, let rhs, let dest):
-            try write(fetch(lhs) == fetch(rhs) ? 1 : 0, to: dest)
+            try write(resolve(lhs) == resolve(rhs) ? 1 : 0, to: dest)
         case .halt:
-            state = .halted
+            executionState = .halted
         }
     }
 }
